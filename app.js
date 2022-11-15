@@ -4,18 +4,17 @@ import { modelView, loadMatrix, multRotationY, multScale, pushMatrix, multTransl
 
 import * as CYLINDER from '../../libs/objects/cylinder.js';
 import * as SPHERE from '../../libs/objects/sphere.js';
+import * as CUBE from '../../libs/objects/cube.js';
 
 /** @type {WebGLRenderingContext} */
 let gl;
 /** @type {WebGLRenderingContextBase} */
 let mode;
 
-const HELI_X = 10; // 740
-const HELI_Y = 5; // 320
-const HELI_Z = HELI_Y;
+const VP_DISTANCE = 100;
+const VP_SQRT_DISTANCE = Math.sqrt(VP_DISTANCE);
 
-const VP_DISTANCE = HELI_X;
-
+let perspective = lookAt([VP_SQRT_DISTANCE, VP_SQRT_DISTANCE, VP_SQRT_DISTANCE], [0, 0, 0], [0, 1, 0]);
 
 function setup(shaders) {
     let canvas = document.getElementById("gl-canvas");
@@ -52,6 +51,18 @@ function setup(shaders) {
             case 's':
                 mode = gl.TRIANGLES;
                 break;
+            case '1':
+                perspective = lookAt([VP_SQRT_DISTANCE, VP_SQRT_DISTANCE, VP_SQRT_DISTANCE], [0, 0, 0], [0, 1, 0]);
+                break;
+            case '2':
+                perspective = lookAt([0, 0, VP_DISTANCE], [0, 0, 0], [0, 1, 0]);
+                break;
+            case '3':
+                perspective = lookAt([0, VP_DISTANCE, 0], [0, 0, 0], [0, 0, 1]);
+                break;
+            case '4':
+                perspective = lookAt([VP_DISTANCE, 0, 0], [0, 0, 0], [0, 1, 0]);
+                break;
         }
     }
 
@@ -59,6 +70,7 @@ function setup(shaders) {
 
     CYLINDER.init(gl);
     SPHERE.init(gl);
+    CUBE.init(gl);
 
     gl.enable(gl.DEPTH_TEST);   // Enables Z-buffer depth test
 
@@ -66,84 +78,207 @@ function setup(shaders) {
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "mModelView"), false, flatten(modelView()));
     }
 
+    function setColor(v) {
+        gl.uniform3fv(gl.getUniformLocation(program, "uColor"), v)
+    }
+
+    //#region Helicopter
+    function Helicopter() {
+        pushMatrix();
+            Body();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([3, 18, 0]);
+            MainRotor();
+        popMatrix();
+            
+        pushMatrix();
+            multTranslation([0, -24, 0]);
+            LandingSkids();
+        popMatrix();
+            
+        pushMatrix();
+            multTranslation([40, 6, 0]);
+            TailBoom();
+        popMatrix();
+    }
+
+    //#region Body
+    function Body() {
+        setColor([255, 0, 0]);
+        multScale([56, 28, 28]);
+        uploadModelView();
+
+        SPHERE.draw(gl, program, mode);
+    }
+    //#endregion
+
+    //#region Main Rotor
     function MainRotor() {
         pushMatrix();
             MainRotorMast();
         popMatrix();
 
         pushMatrix();
-            multTranslation([HELI_X * 0.25, 0, 0]);
+            multTranslation([25, 0, 0]);
             MainRotorBlade();
         popMatrix();
 
         pushMatrix();
             multRotationY(360 / 3);
-            multTranslation([HELI_X * 0.25, 0, 0]);
+            multTranslation([25, 0, 0]);
             MainRotorBlade();
         popMatrix();
 
         pushMatrix();
             multRotationY(360 / 3 * 2);
-            multTranslation([HELI_X * 0.25, 0, 0]);
+            multTranslation([25, 0, 0]);
             MainRotorBlade();
         popMatrix();
     }
 
     function MainRotorBlade() {
-        multScale([HELI_X * 0.5, HELI_Y * 0.06, HELI_Y * 0.15]);
+        setColor([127, 127, 127]);
+        multScale([50, 3, 6]);
         uploadModelView();
 
         SPHERE.draw(gl, program, mode);
     }
 
     function MainRotorMast() {
-        multScale([HELI_X * 0.03, HELI_Y * 0.2, HELI_Z * 0.07]);
+        setColor([255, 0, 0]);
+        multScale([3, 10, 3]);
         uploadModelView();
 
         CYLINDER.draw(gl, program, mode);
     }
+    //#endregion
 
-    function TailRotor() {
+    //#region Landing Skids
+    function LandingSkids() {
+        pushMatrix();
+            multTranslation([0, 0, 16]);
+            multRotationX(-30);
+            LandingSkid();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([0, 0, -16]);
+            multRotationX(30);
+            LandingSkid();
+        popMatrix();
+    }
+    
+    function LandingSkid() {
+        pushMatrix();
+            Skid();
+        popMatrix();
         
-
         pushMatrix();
-            TailRotorCenter();
+            multRotationZ(-10);
+            multTranslation([-12, 6, 0]);
+            SkidArm();
         popMatrix();
-
+        
         pushMatrix();
-            multTranslation([HELI_X * 0.05, 0, 0]);
-            TailRotorBlade();
-        popMatrix();
-
-        pushMatrix();
-            multRotationY(360 / 2);
-            multTranslation([HELI_X * 0.05, 0, 0]);
-            TailRotorBlade();
+            multRotationZ(10);
+            multTranslation([12, 6, 0]);
+            SkidArm();
         popMatrix();
     }
 
-    function TailRotorBlade() {
-        multScale([HELI_X * 0.1, HELI_Y * 0.03, HELI_Z * 0.06]);
+    function SkidArm() {
+        setColor([255, 183, 0]);
+        multScale([2, 16, 2]);
+        uploadModelView();
+
+        CUBE.draw(gl, program, mode);
+    }
+
+    function Skid() {
+        setColor([255, 183, 0]);
+        multScale([50, 2, 2]);
+        multRotationZ(90);
+        uploadModelView();
+
+        CYLINDER.draw(gl, program, mode);
+    }
+    //#endregion
+
+    //#region Tail Boom
+    function TailBoom() {
+        pushMatrix();
+            TailBoomLarge();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([26, 7, 0]);
+            TailBoomSmall();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([26, 7, 6]);
+            multRotationX(90);
+            TailRotor();
+        popMatrix();
+    }
+
+    function TailBoomLarge() {
+        setColor([255, 0, 0]);
+        multScale([52, 8, 8]);
         uploadModelView();
 
         SPHERE.draw(gl, program, mode);
     }
 
-    function TailRotorCenter() {
-        multScale([HELI_X * 0.02, HELI_Y * 0.1, HELI_Z * 0.047]);
+    function TailBoomSmall() {
+        setColor([255, 0, 0]);
+        multRotationZ(60);
+        multScale([15, 8, 8]);
+        uploadModelView();
+
+        SPHERE.draw(gl, program, mode);
+    }
+
+    //#region Tail Rotor
+    function TailRotor() {
+        pushMatrix();
+            TailRotorMast();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([5, 0, 0]);
+            TailRotorBlade();
+        popMatrix();
+
+        pushMatrix();
+            multRotationY(360 / 2);
+            multTranslation([5, 0, 0]);
+            TailRotorBlade();
+        popMatrix();
+    }
+
+    function TailRotorBlade() {
+        setColor([127, 127, 127]);
+        multScale([10, 1, 3]);
+        uploadModelView();
+
+        SPHERE.draw(gl, program, mode);
+    }
+
+    function TailRotorMast() {
+        setColor([255, 0, 0]);
+        multScale([2, 5, 2]);
         uploadModelView();
         
         CYLINDER.draw(gl, program, mode);
     }
+    //#endregion
     
-    function LandingSkid() {
-        multScale([HELI_X * 0.5, HELI_Y * 0.05, HELI_Z * 0.05]);
-        multRotationY(90);
-        multRotationX(-90);
-        uploadModelView();
-
-        CYLINDER.draw(gl, program, mode);
-    }
+    //#endregion
+    
+    //#endregion
 
     function render(t) {
         time = t / 1000;
@@ -158,12 +293,11 @@ function setup(shaders) {
             flatten(mProjection)
         );
         
-        loadMatrix(lookAt([0, VP_DISTANCE / 2, VP_DISTANCE], [0, 0, 0], [0, 1, 0]));
-        //loadMatrix(lookAt([0, VP_DISTANCE / 2, 0], [0, 0, 0], [0, 0, 1]));
-        //loadMatrix(lookAt([0, 0, VP_DISTANCE], [0, 0, 0], [0, 1, 0]));
+        loadMatrix(perspective);
         
-        multRotationY(time * 10);
-        TailRotor();
+        //multRotationY(time * 10);
+        multScale([-1, 1, 1]);
+        Helicopter();
     }
 
     window.requestAnimationFrame(render);
