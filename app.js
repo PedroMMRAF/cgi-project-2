@@ -1,5 +1,5 @@
 import { buildProgramFromSources, loadShadersFromURLS, setupWebGL } from "../../libs/utils.js";
-import { ortho, lookAt, flatten, mult, rotateX, rotateY } from "../../libs/MV.js";
+import { ortho, lookAt, flatten, mult, rotateX, rotateY, inverse, transpose } from "../../libs/MV.js";
 import { modelView, loadMatrix, multRotationY, multScale, pushMatrix, multTranslation, popMatrix, multRotationX, multRotationZ } from "../../libs/stack.js";
 import { GUI } from '../../libs/dat.gui.module.js';
 
@@ -7,38 +7,47 @@ import * as CYLINDER from '../../libs/objects/cylinder.js';
 import * as SPHERE from '../../libs/objects/sphere.js';
 import * as CUBE from '../../libs/objects/cube.js';
 
-class Axonometric {
-    constructor(gamma, theta) {
-        /**@type {number} */
-        this.gamma = gamma;
-        /**@type {number} */
-        this.theta = theta;
-    }
+class Wrapper {}
+
+/** @type {WebGLRenderingContext} */
+let gl;
+let program;
+let mode, time, axonometric;
+let mView, mProjection;
+
+let heli = {
+    rotation: 0,
+    vertical: 0,
 }
 
 const VP_DISTANCE = 200;
 
 function setup(shaders) {
-    /** @type {WebGLRenderingContext} */
-    let gl;
     let canvas = document.getElementById("gl-canvas");
 
-    let mode;
-    let mView;
-    let mProjection;
-    let time;
-
-    let axonometric = new Axonometric(315, 35);
-
     gl = setupWebGL(canvas);
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clearColor(0.30, 0.42, 1.0, 1.0);
     gl.enable(gl.DEPTH_TEST);   // Enables Z-buffer depth test
 
     CYLINDER.init(gl);
     SPHERE.init(gl);
     CUBE.init(gl);
 
-    let program = buildProgramFromSources(gl, shaders["shader.vert"], shaders["shader.frag"]);
+    axonometric = new Wrapper();
+    axonometric.theta = 25;
+    axonometric.gamma = -45;
+
+    program = buildProgramFromSources(gl, shaders["shader.vert"], shaders["shader.frag"]);
+
+    resize_canvas();
+    mode = gl.TRIANGLES;
+    axPerspective();
+
+    const gui = new GUI();
+    const axView = gui.addFolder("Axonometric View");
+    axView.add(axonometric, "theta", -180, 180).onChange(axPerspective);
+    axView.add(axonometric, "gamma", -180, 180).onChange(axPerspective);
+    axView.open();
 
     function resize_canvas() {
         canvas.width = window.innerWidth;
@@ -55,22 +64,9 @@ function setup(shaders) {
 
     function axPerspective() {
         mView = lookAt([0, 0, VP_DISTANCE], [0, 0, 0], [0, 1, 0]);
-        mView = mult(mView, rotateX(this.theta));
-        mView = mult(mView, rotateY(this.gamma));
+        mView = mult(mView, rotateX(axonometric.theta));
+        mView = mult(mView, rotateY(axonometric.gamma));
     }
-
-    // Initialize canvas, mode and view
-    resize_canvas();
-    mode = gl.TRIANGLES;
-    axPerspective();
-
-    //#region GUI
-    const gui = new GUI();
-    const axView = gui.addFolder("Axonometric View");
-    axView.add(axonometric, "theta", 0, 360).onChange(axPerspective);
-    axView.add(axonometric, "gamma", 0, 360).onChange(axPerspective);
-    axView.open();
-    //#endregion
 
     //#region Events
     window.addEventListener("resize", resize_canvas);
@@ -101,11 +97,41 @@ function setup(shaders) {
 
     function uploadModelView() {
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "mModelView"), false, flatten(modelView()));
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "mInvModelView"), false,
+                            flatten(transpose(inverse(modelView()))));
     }
 
-    function setColor(v) {
-        gl.uniform3fv(gl.getUniformLocation(program, "uColor"), v)
+    function uploadColor(v) {
+        gl.uniform3fv(gl.getUniformLocation(program, "uColor"), v.map(x => x/255))
     }
+
+    function Scene() {
+        pushMatrix();
+            multRotationY(time * -50);
+            multTranslation([100, 50, 0]);
+            multRotationX(10);
+            multRotationY(90);
+            multScale([0.5,0.5,0.5]);
+            Helicopter();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([0,-50,0]);
+            Floor();
+        popMatrix();
+    }
+
+    //#region Floor
+
+    function Floor() {
+        uploadColor([70, 70, 70]);
+        multScale([400, 5, 400]);
+        uploadModelView();
+
+        CUBE.draw(gl, program, mode)
+    }
+
+    //#endregion
 
     //#region Helicopter
     function Helicopter() {
@@ -115,7 +141,7 @@ function setup(shaders) {
 
         pushMatrix();
             multTranslation([3, 18, 0]);
-            multRotationY(time * 500);
+            multRotationY(time * 2000);
             MainRotor();
         popMatrix();
     }
@@ -138,7 +164,7 @@ function setup(shaders) {
     }
 
     function MainBody() {
-        setColor([255, 0, 0]);
+        uploadColor([255, 0, 0]);
         multScale([56, 28, 28]);
         uploadModelView();
 
@@ -179,7 +205,7 @@ function setup(shaders) {
     }
 
     function SkidArm() {
-        setColor([255, 183, 0]);
+        uploadColor([255, 183, 0]);
         multScale([2, 16, 2]);
         uploadModelView();
 
@@ -187,7 +213,7 @@ function setup(shaders) {
     }
 
     function Skid() {
-        setColor([255, 183, 0]);
+        uploadColor([255, 183, 0]);
         multScale([50, 2, 2]);
         multRotationZ(90);
         uploadModelView();
@@ -209,7 +235,7 @@ function setup(shaders) {
 
         pushMatrix();
             multTranslation([26, 7, 0]);
-            multRotationZ(time * -500);
+            multRotationZ(time * -2000);
             TailRotors();
         popMatrix();
     }
@@ -229,7 +255,7 @@ function setup(shaders) {
     }
 
     function TailBoomLarge() {
-        setColor([255, 0, 0]);
+        uploadColor([255, 0, 0]);
         multScale([52, 8, 8]);
         uploadModelView();
 
@@ -237,7 +263,7 @@ function setup(shaders) {
     }
 
     function TailBoomSmall() {
-        setColor([255, 0, 0]);
+        uploadColor([255, 0, 0]);
         multRotationZ(60);
         multScale([15, 8, 8]);
         uploadModelView();
@@ -264,7 +290,7 @@ function setup(shaders) {
     }
 
     function TailRotorBlade() {
-        setColor([127, 127, 127]);
+        uploadColor([127, 127, 127]);
         multScale([10, 1, 3]);
         uploadModelView();
 
@@ -272,7 +298,7 @@ function setup(shaders) {
     }
 
     function TailRotorMast() {
-        setColor([255, 0, 0]);
+        uploadColor([255, 0, 0]);
         multScale([2, 5, 2]);
         uploadModelView();
         
@@ -309,7 +335,7 @@ function setup(shaders) {
     }
 
     function MainRotorBlade() {
-        setColor([127, 127, 127]);
+        uploadColor([127, 127, 127]);
         multScale([50, 3, 6]);
         uploadModelView();
 
@@ -317,7 +343,7 @@ function setup(shaders) {
     }
 
     function MainRotorMast() {
-        setColor([255, 0, 0]);
+        uploadColor([255, 0, 0]);
         multScale([3, 10, 3]);
         uploadModelView();
 
@@ -342,16 +368,12 @@ function setup(shaders) {
 
         gl.uniform4fv(
             gl.getUniformLocation(program, "uLightPos"),
-            flatten(mult(mView, [0.0, VP_DISTANCE, 0.0, 1.0]))
+            flatten(mult(mView, [0.0, 150, 0, 1.0]))
         );
         
         loadMatrix(mView);
         
-        multRotationY(time * -50);
-        multTranslation([100, 0, 0]);
-        multRotationX(10);
-        multRotationY(90);
-        Helicopter();
+        Scene();
     }
 
     window.requestAnimationFrame(render);
