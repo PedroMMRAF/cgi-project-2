@@ -1,8 +1,6 @@
 precision highp float;
 
 uniform vec4 uLightPos;
-uniform mat4 mModelView;
-uniform mat4 mProjection;
 
 uniform vec3 uColor;
 

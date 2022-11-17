@@ -7,8 +7,6 @@ import * as CYLINDER from '../../libs/objects/cylinder.js';
 import * as SPHERE from '../../libs/objects/sphere.js';
 import * as CUBE from '../../libs/objects/cube.js';
 
-class Wrapper {}
-
 /** @type {WebGLRenderingContext} */
 let gl;
 let program;
@@ -33,9 +31,10 @@ function setup(shaders) {
     SPHERE.init(gl);
     CUBE.init(gl);
 
-    axonometric = new Wrapper();
-    axonometric.theta = 25;
-    axonometric.gamma = -45;
+    axonometric = new Object({
+        theta: 25,
+        gamma: -45
+    });
 
     program = buildProgramFromSources(gl, shaders["shader.vert"], shaders["shader.frag"]);
 
@@ -116,7 +115,7 @@ function setup(shaders) {
         popMatrix();
 
         pushMatrix();
-            multTranslation([0,-50,0]);
+            multTranslation([0,0,0]);
             Floor();
         popMatrix();
     }
@@ -370,9 +369,8 @@ function setup(shaders) {
             gl.getUniformLocation(program, "uLightPos"),
             flatten(mult(mView, [0.0, 150, 0, 1.0]))
         );
-        
+
         loadMatrix(mView);
-        
         Scene();
     }
 
