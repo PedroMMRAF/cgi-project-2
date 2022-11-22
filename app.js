@@ -246,6 +246,7 @@ function setup(shaders) {
         pushMatrix();
             Cars();
         popMatrix();
+        
         pushMatrix();
             ParkingLot();
         popMatrix();
@@ -684,12 +685,12 @@ function setup(shaders) {
 
     function CarHeadlights(){
         pushMatrix();
-         multTranslation([280, 17, -187]);
-         CarHeadlight();
+            multTranslation([280, 17, -187]);
+            CarHeadlight();
         popMatrix();
         pushMatrix();
-         multTranslation([296, 17, -187]);
-         CarHeadlight();
+            multTranslation([296, 17, -187]);
+            CarHeadlight();
         popMatrix();
     }
 
@@ -789,7 +790,6 @@ function setup(shaders) {
             Stripe();
         popMatrix();
     }
-
 
     //#endregion
 
