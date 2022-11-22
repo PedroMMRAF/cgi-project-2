@@ -11,15 +11,27 @@ import * as CUBE from '../../libs/objects/cube.js';
 let gl;
 let program;
 let mode, time, axonometric;
-let mView, mProjection;
+let mProjection;
 
 let heli = {
     rotation: 0,
     vertical: 0,
+    rotorSpeed: 1.0,
 }
 
-const UNITS_METER = 10;
 const VP_DISTANCE = 200;
+
+const RED = [1.00, 0.00, 0.00];
+const BLUE = [0.00, 0.00, 1.00];
+const DARK_GREEN = [0.15, 0.40, 0.15];
+const LIGHT_YELLOW = [1.00, 1.00, 0.55];
+const GOLD_YELLOW = [1.00, 0.72, 0.00];
+const WHITE = [1.00, 1.00, 1.00];
+const GRAY = [0.50, 0.50, 0.50];
+const DARK_GRAY = [0.20, 0.20, 0.20];
+const FLOOR_GRAY = [0.27, 0.27, 0.27];
+const EIFFEL_COLOR = [0.81, 0.56, 0.25];
+
 
 function setup(shaders) {
     let canvas = document.getElementById("gl-canvas");
@@ -35,7 +47,6 @@ function setup(shaders) {
     axonometric = {
         theta: 25,
         gamma: -45,
-        scale: 0.75,
     };
 
     program = buildProgramFromSources(gl, shaders["shader.vert"], shaders["shader.frag"]);
@@ -47,7 +58,6 @@ function setup(shaders) {
     const axView = gui.addFolder("Axonometric View");
     axView.add(axonometric, "theta", -180, 180).listen();
     axView.add(axonometric, "gamma", -180, 180).listen();
-    axView.add(axonometric, "scale", 0.5, 3);
     axView.open();
 
     function resize_canvas() {
@@ -63,7 +73,6 @@ function setup(shaders) {
         );
     }
 
-    //#region Events
     window.addEventListener("resize", resize_canvas);
 
     document.addEventListener("keydown", function (event) {
@@ -92,40 +101,20 @@ function setup(shaders) {
                 break;
         }
     });
-    //#endregion
 
     function uploadModelView() {
-        gl.uniformMatrix4fv(gl.getUniformLocation(program, "mModelView"), false, flatten(modelView()));
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "mModelView"), false,
+                            flatten(modelView()));
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "mInvModelView"), false,
                             flatten(transpose(inverse(modelView()))));
     }
 
-    function uploadColor(v) {
-        gl.uniform3fv(gl.getUniformLocation(program, "uColor"), v.map(x => x/255))
+    function uploadColor(color) {
+        gl.uniform3fv(gl.getUniformLocation(program, "uColor"), color);
     }
 
-    function Scene() {
-        pushMatrix();
-            multRotationY(time * -50);
-            multTranslation([200, 50, 0]);
-            multRotationX(10);
-            multRotationY(90);
-            Helicopter();
-        popMatrix();
-
-        pushMatrix();
-            multTranslation([0,0,0]);
-            Floor();
-        popMatrix();
-
-        pushMatrix();
-            EiffelTower();
-        popMatrix();
-    }
-
-    //#region EiffelTower
+    //#region Eiffel Tower
     function EiffelTower() {
-        uploadColor([207, 144, 63]);
         multTranslation([0, 25, 0]);
         
         for (let i = 0; i < 4; i++) {
@@ -174,61 +163,47 @@ function setup(shaders) {
         multRotationZ(20);
         multRotationX(20);
         multScale([15, 60, 15]);
-        uploadModelView();
-        CUBE.draw(gl, program, mode);
+        Cube(EIFFEL_COLOR);
     }
 
     function EiffelLegP2() {
         multRotationZ(10);
         multRotationX(10);
         multScale([15, 60, 15]);
-        uploadModelView();
-        CUBE.draw(gl, program, mode);
+        Cube(EIFFEL_COLOR);
     }
 
     function EiffelLegP3() {
         multRotationZ(5);
         multRotationX(5);
         multScale([15, 160, 15]);
-        uploadModelView();
-        CUBE.draw(gl, program, mode);
+        Cube(EIFFEL_COLOR);
     }
 
     function EiffelFloor1() {
         multScale([70, 15, 15]);
-        uploadModelView();
-        CUBE.draw(gl, program, mode);
+        Cube(EIFFEL_COLOR);
     }
 
     function EiffelFloor2() {
         multScale([60, 15, 15]);
-        uploadModelView();
-        CUBE.draw(gl, program, mode);
+        Cube(EIFFEL_COLOR);
     }
 
     function EiffelTop() {
         multScale([15, 40, 15]);
-        uploadModelView();
-        CUBE.draw(gl, program, mode);
+        Cube(EIFFEL_COLOR);
     }
     //#endregion
 
-    //#region Floor
-    function Floor() {
+    //#region Decorations
+    function Decorations() {
         pushMatrix();
-            BaseFloor();
+            Floor();
         popMatrix();
 
         pushMatrix();
-            RoundaboutOuter();
-        popMatrix();
-
-        pushMatrix();
-            RoundaboutInner();
-        popMatrix();
-
-        pushMatrix();
-            RoundaboutStripes();
+            Roundabout();
         popMatrix();
 
         pushMatrix();
@@ -236,10 +211,12 @@ function setup(shaders) {
         popMatrix();
 
         pushMatrix();
+            multTranslation([200, 0, 200]);
             Garden();
         popMatrix();
 
         pushMatrix();
+            multTranslation([-230, 110, 300]);
             Building();
         popMatrix();
 
@@ -248,32 +225,45 @@ function setup(shaders) {
         popMatrix();
         
         pushMatrix();
+            multTranslation([285, 0, -285]);
             ParkingLot();
         popMatrix();
     }
 
-    function BaseFloor() {
-        uploadColor([70, 70, 70]);
+    function Floor() {
         multScale([800, 5, 800]);
-        uploadModelView();
-
-        CUBE.draw(gl, program, mode);
+        Cube(FLOOR_GRAY);
     }
 
-    function RoundaboutOuter() {
-        uploadColor([10, 10, 10]);
+    function Stripe() {
+        multScale([50, 8, 7]);
+        Cube(WHITE);
+    }
+    //#endregion
+
+    //#region Roundabout
+    function Roundabout() {
+        pushMatrix();
+            RoundaboutRoad();
+        popMatrix();
+
+        pushMatrix();
+            RoundaboutGrass();
+        popMatrix();
+
+        pushMatrix();
+            RoundaboutStripes();
+        popMatrix();
+    }
+
+    function RoundaboutRoad() {
         multScale([500, 7, 500]);
-        uploadModelView();
-
-        CYLINDER.draw(gl, program, mode)
+        Cylinder([0.04, 0.04, 0.04]);
     }
 
-    function RoundaboutInner() {
-        uploadColor([162, 173, 21]);
+    function RoundaboutGrass() {
         multScale([300, 8, 300]);
-        uploadModelView();
-
-        CYLINDER.draw(gl, program, mode)
+        Cylinder([0.64, 0.68, 0.08]);
     }
 
     function RoundaboutStripes() {
@@ -285,399 +275,291 @@ function setup(shaders) {
             popMatrix();
         }
     }
+    //#endregion
 
-    function Stripe() {
-        uploadColor([240, 240, 240]);
-        multScale([50, 8, 7]);
-        uploadModelView();
-
-        CUBE.draw(gl, program, mode)
-    }
-
+    //#region Roads
     function Roads(){
         pushMatrix();
             Road();
         popMatrix();
+
         pushMatrix();
             multRotationY(90);
             Road();
         popMatrix();
-        pushMatrix();
-            RoadStripes();
-        popMatrix();
     }
 
     function Road(){
-        uploadColor([10, 10, 10]);
-        multScale([150, 7, 800]);
-        uploadModelView();
+        pushMatrix();
+            multScale([800, 7, 150]);
+            Cube([0.04, 0.04, 0.04]);
+        popMatrix();
 
-        CUBE.draw(gl, program, mode)
-    }
-
-    function RoadStripes(){
         pushMatrix();
             multTranslation([-370, 0, 0]);
             Stripe();
         popMatrix();
+
         pushMatrix();
             multTranslation([-270, 0, 0]);
             Stripe();
         popMatrix();
+
         pushMatrix();
             multTranslation([270, 0, 0]);
             Stripe();
         popMatrix();
+
         pushMatrix();
             multTranslation([370, 0, 0]);
             Stripe();
         popMatrix();
-        pushMatrix();
-            multTranslation([0, 0, -370]);
-            multRotationY(90);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([0, 0, -270]);
-            multRotationY(90);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([0, 0, 270]);
-            multRotationY(90);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([0, 0, 370]);
-            multRotationY(90);
-            Stripe();
-        popMatrix();
     }
 
-    function Garden(){
+    function Cars(){
+        pushMatrix();
+            multTranslation([-40, 0, -300]);
+            Car(RED);
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([300, 0, -40]);
+            multRotationY(-90);
+            Car(BLUE);
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([-300, 0, 40]);
+            multRotationY(90);
+            Car(DARK_GREEN);
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([40, 0, 300]);
+            multRotationY(180);
+            Car(RED);
+        popMatrix();
+    }
+    //#endregion
+
+    //#region Garden
+    function Garden() {
         pushMatrix();
             GardenGrass();
         popMatrix();
+
         pushMatrix();
+            multTranslation([65, 0, 75]);
             Lake();
         popMatrix();
+
         pushMatrix();
             Trees();
         popMatrix();
     }
 
     function GardenGrass(){
-        uploadColor([162, 173, 21]);
-        multTranslation([200, 0, 200]);
         multScale([400, 6, 400]);
-        uploadModelView();
-
-        CUBE.draw(gl, program, mode)
+        Cube([0.64, 0.68, 0.08]);
     }
 
     function Lake(){
-        uploadColor([0, 102, 170]);
-        multTranslation([265, 0, 275]);
         multScale([200, 7, 200]);
-        uploadModelView();
-
-        CYLINDER.draw(gl, program, mode)
+        Cylinder([0.00, 0.40, 0.67])
     }
 
     function Trees(){
         pushMatrix();
-            multTranslation([350, 0, 150]);
+            multTranslation([150, 0, -50]);
             Tree();
         popMatrix();
+
         pushMatrix();
-            multTranslation([150, 0, 350]);
+            multTranslation([-50, 0, 150]);
             Tree();
         popMatrix();
     }
 
     function Tree(){
         pushMatrix();
+            multTranslation([0, 35, 0]);
             Log();
         popMatrix();
+        
         pushMatrix();
+            multTranslation([0, 70, 0]);
             Leaves();
         popMatrix();
-
     }
 
     function Log(){
-        uploadColor([202, 83, 2]);
-        multTranslation([0, 35, 0]);
         multScale([10, 70, 10]);
-        uploadModelView();
-
-        CYLINDER.draw(gl, program, mode)
-
+        Cylinder([0.79, 0.33, 0.01]);
     }
 
     function Leaves(){
-        uploadColor([126, 185, 3]);
-        multTranslation([0, 70, 0]);
         multScale([70, 55, 70]);
-        uploadModelView();
-
-        SPHERE.draw(gl, program, mode)
-
+        Sphere([0.49, 0.73, 0.01]);
     }
+    //#endregion
+
+    //#region Building
     function Building(){
         pushMatrix();
             Structure();
         popMatrix();
+
         pushMatrix();
+            multTranslation([60, 70, 40]);
             Windows();
         popMatrix();
+
         pushMatrix();
+            multTranslation([60, -90, 0]);
             BuildingDoor();
         popMatrix();
+
         pushMatrix();
+            multTranslation([0, 110, 0]);
             Heliport()
         popMatrix();
         
     }
 
     function Structure(){
-        uploadColor([46, 47, 52]);
-        multTranslation([-230, 110, 300]);
         multScale([120, 220, 120]);
-        uploadModelView();
-
-        CUBE.draw(gl, program, mode)
+        Cube(DARK_GRAY);
     }
 
     function Windows(){
-        pushMatrix();
-            multTranslation([-170, 180, 340]);
-            Window();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-170, 180, 300]);
-            Window();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-170, 180, 260]);
-            Window();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-170, 130, 340]);
-            Window();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-170, 130, 300]);
-            Window();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-170, 130, 260]);
-            Window();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-170, 80, 340]);
-            Window();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-170, 80, 300]);
-            Window();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-170, 80, 260]);
-            Window();
-        popMatrix();
+        for (let y = 0; y < 3; y++) {
+            for (let z = 0; z < 3; z++) {
+                pushMatrix();
+                    multTranslation([0, -50 * y, -40 * z]);
+                    Window();
+                popMatrix();
+            }
+        }
     }
 
     function Window(){
-        uploadColor([255, 253, 141]);
         multRotationZ(90);
         multScale([30, 1, 20]);
-        uploadModelView();
-
-        CUBE.draw(gl, program, mode)
+        Cube(LIGHT_YELLOW);
     }
 
     function BuildingDoor(){
-        uploadColor([171, 108, 80]);
-        multTranslation([-170, 20, 300])
         multRotationZ(90);
         multScale([40, 1, 30]);
-        uploadModelView();
-
-        CUBE.draw(gl, program, mode)
+        Cube([0.67, 0.42, 0.31]);
     }
 
     function Heliport(){
         pushMatrix();
-            multTranslation([-230, 220, 300]);
             HeliPortOuterCircle();
         popMatrix();
+
         pushMatrix();
-            multTranslation([-230, 220, 300]);
             HeliPortInnerCircle();
         popMatrix();
+
         pushMatrix();
-            multTranslation([-230, 220, 300]);
             HeliportHorizontalStripe();
         popMatrix();
+
         pushMatrix();
-            multTranslation([-230, 220, 280]);
+            multTranslation([0, 0, -20]);
             HeliportVerticalStripe();
         popMatrix();
+
         pushMatrix();
-            multTranslation([-230, 220, 320]);
+            multTranslation([0, 0, 20]);
             HeliportVerticalStripe();
         popMatrix();
         
     }
 
     function HeliPortOuterCircle(){
-        uploadColor([254, 254, 254]);
         multScale([120, 1, 120]);
-        uploadModelView();
-
-        CYLINDER.draw(gl, program, mode)
+        Cylinder(WHITE);
     }
 
     function HeliPortInnerCircle(){
-        uploadColor([28, 28, 28]);
         multScale([100, 2, 100]);
-        uploadModelView();
-
-        CYLINDER.draw(gl, program, mode)
+        Cylinder([0.11, 0.11, 0.11]);
     }
 
     function HeliportHorizontalStripe(){
-        uploadColor([254, 254, 254]);
         multScale([10, 3, 40]);
-        uploadModelView();
-
-        CUBE.draw(gl, program, mode)
+        Cube(WHITE);
     }
 
     function HeliportVerticalStripe(){
-        uploadColor([254, 254, 254]);
         multRotationY(90);
         multScale([10, 3, 60]);
-        uploadModelView();
-
-        CUBE.draw(gl, program, mode)
+        Cube(WHITE);
     }
+    //#endregion
 
-    function Cars(){
+    //#region Parking Lot
+    const PARKED_X = [
+        RED, DARK_GREEN, null
+    ]
+
+    const PARKED_Z = [
+        DARK_GREEN, BLUE, RED
+    ]
+
+    function ParkingLot(){
+        for (let i = 0; i < 4; i++) {
+            pushMatrix();
+                multTranslation([30 - i * 60, 0, -90]);
+                multRotationY(90);
+                Stripe();
+            popMatrix();
+        }
+
+        for (let i = 0; i < 3; i++) {
+            if (!PARKED_X[i]) continue;
+
+            pushMatrix();
+                multTranslation([i * -60, 0, -90]);
+                Car(PARKED_X[i]);
+            popMatrix();
+        }
+
+        for (let i = 0; i < 4; i++) {
+            pushMatrix();
+                multTranslation([90, 0, -30 + i * 60]);
+                Stripe();
+            popMatrix();
+        }
+
+        for (let i = 0; i < 3; i++) {
+            if (!PARKED_Z[i]) continue;
+
+            pushMatrix();
+                multTranslation([90, 0, i * 60]);
+                multRotationY(-90);
+                Car(PARKED_Z[i]);
+            popMatrix();
+        }
+    }
+    //#endregion
+
+    //#region Car
+    function Car(color) {
+        multTranslation([0, 17, 0]);
+
         pushMatrix();
-            multTranslation([0,0,-160]);
-            RedCar();
+            CarWheels();
         popMatrix();
+
         pushMatrix();
-            multTranslation([55,0,-160]);
-            BlueCar();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-55,0,-160]);
-            GreenCar();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-110,0,-160]);
-            RedCar();
-        popMatrix();
-        pushMatrix();
-            multTranslation([160,0,-515]);
-            multRotationY(-90);
-            BlueCar();
-        popMatrix();
-        pushMatrix();
-            multTranslation([160,0,-570]);
-            multRotationY(-90);
-            GreenCar();
-        popMatrix();
-        pushMatrix();
-            multTranslation([160,0,-460]);
-            multRotationY(-90);
-            RedCar();
-        popMatrix();
-        pushMatrix();
-            multTranslation([80,0,-245]);
-            multRotationY(-90);
-            BlueCar();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-235,0,-80]);
-            RedCar();
-        popMatrix();
-        pushMatrix();
-            multTranslation([-80,0,250]);
             multRotationY(90);
-            GreenCar();
+            CarBody(color);
         popMatrix();
-        pushMatrix();
-            multTranslation([40,0,-245]);
-            multRotationY(200);
-            BlueCar();
-        popMatrix();
-        pushMatrix();
-            multTranslation([25,0,200]);
-            multRotationY(25);
-            GreenCar();
-        popMatrix();
-        pushMatrix();
-            multTranslation([250,0,100]);
-            multRotationY(180);
-            RedCar();
-        popMatrix();
-    }
-    function GreenCar(){
-        pushMatrix();
-            CarWheels();
-        popMatrix();
-        pushMatrix();
-            uploadColor([37, 101, 37]);
-            multTranslation([288, 17, -212]);
-            CarLowerBody();
-        popMatrix();
-        pushMatrix();
-            uploadColor([37, 101, 37]);
-            multTranslation([288, 27, -212]);
-            CarUpperBody();
-        popMatrix();
-        pushMatrix();
-            CarHeadlights();
-        popMatrix();
-    }
 
-
-    function RedCar(){
-        pushMatrix();
-            CarWheels();
-        popMatrix();
-        pushMatrix();
-            uploadColor([222, 0, 0]);
-            multTranslation([288, 17, -212]);
-            CarLowerBody();
-        popMatrix();
-        pushMatrix();
-            uploadColor([222, 0, 0]);
-            multTranslation([288, 27, -212]);
-            CarUpperBody();
-        popMatrix();
-        pushMatrix();
-            CarHeadlights();
-        popMatrix();
-    }
-    function BlueCar(){
-        pushMatrix();
-            CarWheels();
-        popMatrix();
-        pushMatrix();
-            uploadColor([0, 0, 255]);
-            multTranslation([288, 17, -212]);
-            CarLowerBody();
-        popMatrix();
-        pushMatrix();
-            uploadColor([0, 0, 255]);
-            multTranslation([288, 27, -212]);
-            CarUpperBody();
-        popMatrix();
         pushMatrix();
             CarHeadlights();
         popMatrix();
@@ -685,112 +567,70 @@ function setup(shaders) {
 
     function CarHeadlights(){
         pushMatrix();
-            multTranslation([280, 17, -187]);
+            multTranslation([-8, 0, 25]);
             CarHeadlight();
         popMatrix();
+
         pushMatrix();
-            multTranslation([296, 17, -187]);
+            multTranslation([8, 0, 25]);
             CarHeadlight();
         popMatrix();
     }
 
     function CarHeadlight(){
-        uploadColor([255, 253, 141]);
         multRotationX(90);
-        multScale([5,1,5]);
-        uploadModelView();
-
-        CYLINDER.draw(gl ,program, mode);
+        multScale([5, 1, 5]);
+        Cylinder(LIGHT_YELLOW);
     }
 
-    function CarUpperBody(){
-        multRotationY(90);
-        multScale([22,10,25]);
-        uploadModelView();
+    function CarBody(color) {
+        pushMatrix();
+            CarLowerBody(color);
+        popMatrix();
 
-        CUBE.draw(gl,program,mode)
+        pushMatrix();
+            multTranslation([0, 10, 0]);
+            CarUpperBody(color);
+        popMatrix();
     }
 
-    function CarLowerBody(){
-        multRotationY(90);
-        multScale([50,15,25]);
-        uploadModelView();
+    function CarUpperBody(color) {
+        multScale([22, 10, 25]);
+        Cube(color);
+    }
 
-        CUBE.draw(gl,program,mode)
+    function CarLowerBody(color) {
+        multScale([50, 15, 25]);
+        Cube(color);
     }
 
     function CarWheels(){
         pushMatrix();
-            multTranslation([300, 8, -200]);
+            multTranslation([12, -8, 12]);
             CarWheel();
         popMatrix();
+
         pushMatrix();
-            multTranslation([276, 8, -200]);
+            multTranslation([-12, -8, 12]);
             CarWheel();
         popMatrix();
+
         pushMatrix();
-            multTranslation([300, 8, -225]);
+            multTranslation([12, -8, -12]);
             CarWheel();
         popMatrix();
+
         pushMatrix();
-            multTranslation([276, 8, -225]);
+            multTranslation([-12, -8, -12]);
             CarWheel();
         popMatrix();
     }
 
     function CarWheel(){
-        uploadColor([51, 45, 47]);
         multRotationZ(90);
-        multScale([10,5,10]);
-        uploadModelView();
-
-        CYLINDER.draw(gl, program, mode)
+        multScale([10, 5, 10]);
+        Cylinder(DARK_GRAY);
     }
-
-    function ParkingLot(){
-        pushMatrix();
-            multTranslation([365, 0, -374]);
-            multRotationY(90);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([310, 0, -374]);
-            multRotationY(90);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([255, 0, -374]);
-            multRotationY(90);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([200, 0, -374]);
-            multRotationY(90);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([145, 0, -374]);
-            multRotationY(90);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([375, 0, -310]);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([375, 0, -255]);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([375, 0, -200]);
-            Stripe();
-        popMatrix();
-        pushMatrix();
-            multTranslation([375, 0, -145]);
-            Stripe();
-        popMatrix();
-    }
-
     //#endregion
 
     //#region Helicopter
@@ -801,15 +641,15 @@ function setup(shaders) {
 
         pushMatrix();
             multTranslation([3, 18, 0]);
-            multRotationY(time * 2000);
+            multRotationY(time * 2000 * heli.rotorSpeed);
             MainRotor();
         popMatrix();
     }
 
-    //#region Body
     function Body() {
         pushMatrix();
-            MainBody();
+            multScale([56, 28, 28]);
+            Sphere(RED);
         popMatrix();
 
         pushMatrix();
@@ -823,15 +663,6 @@ function setup(shaders) {
         popMatrix();
     }
 
-    function MainBody() {
-        uploadColor([255, 0, 0]);
-        multScale([56, 28, 28]);
-        uploadModelView();
-
-        SPHERE.draw(gl, program, mode);
-    }
-
-    //#region Landing Skids
     function LandingSkids() {
         pushMatrix();
             multTranslation([0, 0, 16]);
@@ -865,24 +696,16 @@ function setup(shaders) {
     }
 
     function SkidArm() {
-        uploadColor([255, 183, 0]);
         multScale([2, 16, 2]);
-        uploadModelView();
-
-        CUBE.draw(gl, program, mode);
+        Cube(GOLD_YELLOW);
     }
 
     function Skid() {
-        uploadColor([255, 183, 0]);
         multScale([50, 2, 2]);
         multRotationZ(90);
-        uploadModelView();
-
-        CYLINDER.draw(gl, program, mode);
+        Cylinder(GOLD_YELLOW);
     }
-    //#endregion
-
-    //#region Tail Boom
+    
     function TailBoom() {
         pushMatrix();
             TailBoomLarge();
@@ -892,10 +715,22 @@ function setup(shaders) {
             multTranslation([26, 7, 0]);
             TailBoomSmall();
         popMatrix();
+    }
+
+    function TailBoomLarge() {
+        multScale([52, 8, 8]);
+        Sphere(RED);
+    }
+
+    function TailBoomSmall() {
+        pushMatrix();
+            multRotationZ(70);
+            multScale([15, 8, 8]);
+            Sphere(RED);
+        popMatrix();
 
         pushMatrix();
-            multTranslation([26, 7, 0]);
-            multRotationZ(time * -2000);
+            multRotationZ(time * -2000 * heli.rotorSpeed);
             TailRotors();
         popMatrix();
     }
@@ -914,104 +749,92 @@ function setup(shaders) {
         popMatrix();
     }
 
-    function TailBoomLarge() {
-        uploadColor([255, 0, 0]);
-        multScale([52, 8, 8]);
-        uploadModelView();
-
-        SPHERE.draw(gl, program, mode);
-    }
-
-    function TailBoomSmall() {
-        uploadColor([255, 0, 0]);
-        multRotationZ(60);
-        multScale([15, 8, 8]);
-        uploadModelView();
-
-        SPHERE.draw(gl, program, mode);
-    }
-
-    //#region Tail Rotor
     function TailRotor() {
         pushMatrix();
-            TailRotorMast();
+            TailRotorHandle();
         popMatrix();
 
-        pushMatrix();
-            multTranslation([5, 0, 0]);
-            TailRotorBlade();
-        popMatrix();
-
-        pushMatrix();
-            multRotationY(360 / 2);
-            multTranslation([5, 0, 0]);
-            TailRotorBlade();
-        popMatrix();
+        for (let i = 0; i < 2; i++) {
+            pushMatrix();
+                multRotationY(i * 180);
+                multTranslation([5, 0, 0]);
+                TailRotorBlade();
+            popMatrix();
+        }
     }
 
-    function TailRotorBlade() {
-        uploadColor([127, 127, 127]);
-        multScale([10, 1, 3]);
-        uploadModelView();
-
-        SPHERE.draw(gl, program, mode);
-    }
-
-    function TailRotorMast() {
-        uploadColor([255, 0, 0]);
+    function TailRotorHandle() {
         multScale([2, 5, 2]);
-        uploadModelView();
-        
-        CYLINDER.draw(gl, program, mode);
+        Cylinder(RED);
     }
-    //#endregion
     
-    //#endregion
+    function TailRotorBlade() {
+        multScale([10, 1, 3]);
+        Sphere(GRAY);
+    }
     
-    //#endregion
-
-    //#region Main Rotor
     function MainRotor() {
         pushMatrix();
             MainRotorMast();
         popMatrix();
 
-        pushMatrix();
-            multTranslation([25, 0, 0]);
-            MainRotorBlade();
-        popMatrix();
-
-        pushMatrix();
-            multRotationY(360 / 3);
-            multTranslation([25, 0, 0]);
-            MainRotorBlade();
-        popMatrix();
-
-        pushMatrix();
-            multRotationY(360 / 3 * 2);
-            multTranslation([25, 0, 0]);
-            MainRotorBlade();
-        popMatrix();
+        for (let i = 0; i < 3; i++) {
+            pushMatrix();
+                multRotationY(i * 120);
+                multTranslation([25, 0, 0]);
+                MainRotorBlade();
+            popMatrix();
+        }
     }
 
     function MainRotorBlade() {
-        uploadColor([127, 127, 127]);
         multScale([50, 3, 6]);
-        uploadModelView();
-
-        SPHERE.draw(gl, program, mode);
+        Sphere(GRAY);
     }
 
     function MainRotorMast() {
-        uploadColor([255, 0, 0]);
         multScale([3, 10, 3]);
-        uploadModelView();
-
-        CYLINDER.draw(gl, program, mode);
+        Cylinder(RED);
     }
     //#endregion
 
+    //#region Base Models
+    function Cube(color) {
+        uploadColor(color);
+        uploadModelView();
+        CUBE.draw(gl, program, mode);
+    }
+
+    function Sphere(color) {
+        uploadColor(color);
+        uploadModelView();
+        SPHERE.draw(gl, program, mode);
+    }
+    
+    function Cylinder(color) {
+        uploadColor(color);
+        uploadModelView();
+        CYLINDER.draw(gl, program, mode);
+    }
     //#endregion
+    
+    function Scene() {
+        pushMatrix();
+            multRotationY(time * -50);
+            multTranslation([200, 100, 0]);
+            multRotationX(10);
+            multRotationY(90);
+            Helicopter();
+        popMatrix();
+
+        pushMatrix();
+            Decorations();
+        popMatrix();
+
+        pushMatrix();
+            EiffelTower();
+        popMatrix();
+    }
 
     function render(t) {
         time = t / 1000;
@@ -1025,12 +848,14 @@ function setup(shaders) {
             gl.getUniformLocation(program, "mProjection"), false,
             flatten(mProjection)
         );
-
+        
+        // Set camera point of view
         loadMatrix(lookAt([0, 0, VP_DISTANCE], [0, 0, 0], [0, 1, 0]));
         multRotationX(axonometric.theta);
         multRotationY(axonometric.gamma);
-        multScale([axonometric.scale, axonometric.scale, axonometric.scale]);
+        multScale([0.6, 0.6, 0.6]);
 
+        // modelView() is just the view matrix at this point
         // Light direction
         gl.uniform4fv(
             gl.getUniformLocation(program, "uLightDir"),
