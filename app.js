@@ -718,6 +718,9 @@ function setup(shaders) {
         multScale([10, 5, 10]);
         Cylinder(DARK_GRAY);
     }
+    //#endregion
+
+    //#region House
     function House(){
         pushMatrix();
             multTranslation([-255, 50, -270]);
@@ -748,13 +751,13 @@ function setup(shaders) {
 
     function HouseWindow(){
         multRotationX(90);
-        multScale([40,1,30]);
+        multScale([40, 1, 30]);
         Cube([0.49, 0.64, 0.74]);
     }
 
     function HouseDoor(){
         multRotationX(90);
-        multScale([30,1,40]);
+        multScale([30, 1, 40]);
         Cube([0.51, 0.28, 0.3]);
     }
 
@@ -766,7 +769,6 @@ function setup(shaders) {
     function HouseStructure(){
         multScale([200, 100, 150]);
         Cube(WHITE);
-
     }
     //#endregion
 
