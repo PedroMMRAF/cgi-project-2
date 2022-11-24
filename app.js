@@ -6,6 +6,7 @@ import { GUI } from '../../libs/dat.gui.module.js';
 import * as CYLINDER from '../../libs/objects/cylinder.js';
 import * as SPHERE from '../../libs/objects/sphere.js';
 import * as CUBE from '../../libs/objects/cube.js';
+import * as PYRAMID from '../../libs/objects/pyramid.js';
 
 /** @type {WebGLRenderingContext} */
 let gl;
@@ -49,6 +50,7 @@ const GRAY = [0.50, 0.50, 0.50];
 const DARK_GRAY = [0.20, 0.20, 0.20];
 const FLOOR_GRAY = [0.27, 0.27, 0.27];
 const EIFFEL_COLOR = [0.81, 0.56, 0.25];
+const ROOF_COLOR = [0.75, 0.42, 0.34];
 
 
 function setup(shaders) {
@@ -61,6 +63,7 @@ function setup(shaders) {
     CYLINDER.init(gl);
     SPHERE.init(gl);
     CUBE.init(gl);
+    PYRAMID.init(gl);
 
     axonometric = {
         theta: 25,
@@ -305,6 +308,12 @@ function setup(shaders) {
         pushMatrix();
             multTranslation([285, 0, -285]);
             ParkingLot();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([100,0,-230]);
+            multRotationY(40);
+            House();
         popMatrix();
     }
 
@@ -709,6 +718,56 @@ function setup(shaders) {
         multScale([10, 5, 10]);
         Cylinder(DARK_GRAY);
     }
+    function House(){
+        pushMatrix();
+            multTranslation([-255, 50, -270]);
+            HouseStructure();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([-255, 150, -270]);
+            Roof();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([-255, 20, -195]);
+            HouseDoor();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([-320, 60, -195]);
+            HouseWindow();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([-190, 60, -195]);
+            HouseWindow();
+        popMatrix();
+
+    }
+
+    function HouseWindow(){
+        multRotationX(90);
+        multScale([40,1,30]);
+        Cube([0.49, 0.64, 0.74]);
+    }
+
+    function HouseDoor(){
+        multRotationX(90);
+        multScale([30,1,40]);
+        Cube([0.51, 0.28, 0.3]);
+    }
+
+    function Roof(){
+        multScale([200, 100, 150]);
+        Pyramid(ROOF_COLOR);
+    }
+
+    function HouseStructure(){
+        multScale([200, 100, 150]);
+        Cube(WHITE);
+
+    }
     //#endregion
 
     //#region Helicopter
@@ -897,6 +956,12 @@ function setup(shaders) {
         uploadColor(color);
         uploadModelView();
         CYLINDER.draw(gl, program, mode);
+    }
+
+    function Pyramid(color){
+        uploadColor(color);
+        uploadModelView();
+        PYRAMID.draw(gl, program, mode);
     }
     //#endregion
     
