@@ -1,5 +1,5 @@
 import { buildProgramFromSources, loadShadersFromURLS, setupWebGL } from "../../libs/utils.js";
-import { ortho, lookAt, flatten, mult, rotateX, rotateY, inverse, transpose, mat4 } from "../../libs/MV.js";
+import { ortho, lookAt, flatten, mult, rotateX, rotateY, inverse, transpose, mat4, vec2, perspective, vec4, vec3 } from "../../libs/MV.js";
 import { modelView, loadMatrix, multRotationY, multScale, pushMatrix, multTranslation, popMatrix, multRotationX, multRotationZ } from "../../libs/stack.js";
 import { GUI } from '../../libs/dat.gui.module.js';
 
@@ -10,16 +10,34 @@ import * as CUBE from '../../libs/objects/cube.js';
 /** @type {WebGLRenderingContext} */
 let gl;
 let program;
-let mode, time, axonometric;
-let mProjection;
+let mode, time, delta, axonometric, aspect;
+let mProjection, mView, invView;
 
 let heli = {
-    rotation: 0,
-    vertical: 0,
-    rotorSpeed: 1.0,
+    horz: {
+        pos: 0,
+        speed: 0,
+        accel: 0,
+    },
+    vert: {
+        pos: 24,
+        speed: 0,
+        accel: 0,
+    },
+    rotor: {
+        pos: 0,
+        speed: 0,
+        accel: 0,
+    },
+    height: 0,
+    lifting: false,
+    coords: vec3(),
+    forward: vec3(),
 }
 
-const VP_DISTANCE = 200;
+const GROUND_HEIGHT = 5;
+
+const VP_DISTANCE = 400;
 
 const RED = [1.00, 0.00, 0.00];
 const BLUE = [0.00, 0.00, 1.00];
@@ -47,6 +65,7 @@ function setup(shaders) {
     axonometric = {
         theta: 25,
         gamma: -45,
+        active: true,
     };
 
     program = buildProgramFromSources(gl, shaders["shader.vert"], shaders["shader.frag"]);
@@ -65,12 +84,37 @@ function setup(shaders) {
         canvas.height = window.innerHeight;
         gl.viewport(0, 0, canvas.width, canvas.height);
 
-        const aspect = canvas.width / canvas.height;
+        aspect = canvas.width / canvas.height;
+        if (axonometric.active)
+            orthoProj();
+        else
+            perspProj();
+    }
+
+    function setAxonometric(theta, gamma) {
+        gui.show();
+        axonometric.active = true;
+        axonometric.theta = theta;
+        axonometric.gamma = gamma;
+        orthoProj();
+    }
+
+    function setPerspective() {
+        gui.hide();
+        axonometric.active = false;
+        perspProj();
+    }
+
+    function orthoProj() {
         mProjection = ortho(
             -VP_DISTANCE * aspect, VP_DISTANCE * aspect,
             -VP_DISTANCE, VP_DISTANCE,
             -4 * VP_DISTANCE, 4 * VP_DISTANCE
         );
+    }
+
+    function perspProj() {
+        mProjection = perspective(80, aspect, 1, -2 * VP_DISTANCE);
     }
 
     window.addEventListener("resize", resize_canvas);
@@ -83,24 +127,46 @@ function setup(shaders) {
             case 's':
                 mode = gl.TRIANGLES;
                 break;
+            case 'ArrowLeft':
+                heli.horz.accel = 10;
+                break;
+            case 'ArrowDown':
+                heli.vert.accel = -10;
+                break;
+            case 'ArrowUp':
+                heli.lifting = true;
+                heli.vert.accel = 10;
+                break;
             case '1':
-                axonometric.theta = 25;
-                axonometric.gamma = -45;
+                setAxonometric(25, -45);
                 break;
             case '2':
-                axonometric.theta = 0;
-                axonometric.gamma = 0;
+                setAxonometric(0, 0);
                 break;
             case '3':
-                axonometric.theta = 90;
-                axonometric.gamma = 0;
+                setAxonometric(90, 0);
                 break;
             case '4':
-                axonometric.theta = 0;
-                axonometric.gamma = 90;
+                setAxonometric(0, 90);
+                break;
+            case '5':
+                setPerspective();
                 break;
         }
     });
+
+    document.addEventListener("keyup", function (event) {
+        switch (event.key) {
+            case 'ArrowLeft':
+                heli.horz.accel = 0;
+                break;
+            case 'ArrowUp':
+                heli.lifting = false;
+            case 'ArrowDown':
+                heli.vert.accel = 0;
+                break;
+        }
+    })
 
     function uploadModelView() {
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "mModelView"), false,
@@ -231,7 +297,7 @@ function setup(shaders) {
     }
 
     function Floor() {
-        multScale([800, 5, 800]);
+        multScale([800, GROUND_HEIGHT, 800]);
         Cube(FLOOR_GRAY);
     }
 
@@ -641,7 +707,7 @@ function setup(shaders) {
 
         pushMatrix();
             multTranslation([3, 18, 0]);
-            multRotationY(time * 2000 * heli.rotorSpeed);
+            multRotationY(heli.rotor.pos);
             MainRotor();
         popMatrix();
     }
@@ -678,6 +744,10 @@ function setup(shaders) {
     }
     
     function LandingSkid() {
+        const mModel = mult(invView, modelView());
+        const bottom = mult(mModel, [-50, -2, 0, 1]);
+        heli.height = heli.coords[1] - bottom[1];
+
         pushMatrix();
             Skid();
         popMatrix();
@@ -730,7 +800,7 @@ function setup(shaders) {
         popMatrix();
 
         pushMatrix();
-            multRotationZ(time * -2000 * heli.rotorSpeed);
+            multRotationZ(-heli.rotor.pos);
             TailRotors();
         popMatrix();
     }
@@ -818,12 +888,50 @@ function setup(shaders) {
     }
     //#endregion
     
+    function GlobalLight(pos) {
+        gl.uniform4fv(
+            gl.getUniformLocation(program, "uLightDir"),
+            flatten(mult(mView, pos))
+        );
+    }
+
+    function updateHeli() {
+        const vDecay = heli.vert.speed * 0.3;
+        heli.vert.speed += (heli.vert.accel - vDecay) / delta;
+        heli.vert.pos += heli.vert.speed / delta;
+
+        const onGround = heli.vert.pos - 1 <= heli.height + GROUND_HEIGHT;
+        if (onGround && !heli.lifting) {
+            heli.vert.speed = 0;
+            heli.vert.pos = heli.height + GROUND_HEIGHT;
+            heli.horz.accel = 0;
+        }
+
+        const hDecay = heli.horz.speed * 0.3;
+        heli.horz.speed += (heli.horz.accel - hDecay) / delta;
+        heli.horz.pos += heli.horz.speed / delta;
+        heli.horz.pos %= 360;
+
+        heli.rotor.accel = !onGround ? 80 + 2 * heli.horz.speed : 0;
+        const rDecay = heli.rotor.speed * 0.3;
+        heli.rotor.speed += (heli.rotor.accel - rDecay) / delta;
+        heli.rotor.pos += heli.rotor.speed / delta;
+    }
+
     function Scene() {
         pushMatrix();
-            multRotationY(time * -50);
-            multTranslation([200, 100, 0]);
-            multRotationX(10);
+            if (delta > 0)
+                updateHeli();
+
+            multRotationY(-heli.horz.pos);
+            multTranslation([200, heli.vert.pos, 0]);
+            multRotationX(heli.horz.speed / 2);
             multRotationY(90);
+
+            const mModel = mult(invView, modelView())
+            heli.coords = vec3(mult(mModel, [-40.0, 0, 0, 1.0]));
+            heli.forward = vec3(mult(mModel, [-41.0, 0, 0, 1.0]));
+
             Helicopter();
         popMatrix();
 
@@ -837,7 +945,9 @@ function setup(shaders) {
     }
 
     function render(t) {
-        time = t / 1000;
+        delta = time === undefined ? 0 : t - time;
+        time = t;
+
         window.requestAnimationFrame(render);
 
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -850,18 +960,20 @@ function setup(shaders) {
         );
         
         // Set camera point of view
-        loadMatrix(lookAt([0, 0, VP_DISTANCE], [0, 0, 0], [0, 1, 0]));
-        multRotationX(axonometric.theta);
-        multRotationY(axonometric.gamma);
-        multScale([0.6, 0.6, 0.6]);
+        if (axonometric.active) {
+            loadMatrix(lookAt([0, 0, VP_DISTANCE], [0, 0, 0], [0, 1, 0]));
+            multRotationX(axonometric.theta);
+            multRotationY(axonometric.gamma);
+        }
+        else {
+            loadMatrix(lookAt(heli.coords, heli.forward, [0, 1, 0]));
+        }
 
         // modelView() is just the view matrix at this point
-        // Light direction
-        gl.uniform4fv(
-            gl.getUniformLocation(program, "uLightDir"),
-            flatten(mult(modelView(), [0, 5, 2, 0.0]))
-        );
+        mView = modelView();
+        invView = inverse(mView);
 
+        GlobalLight([0, 5, 2, 0]);
         Scene();
     }
 
