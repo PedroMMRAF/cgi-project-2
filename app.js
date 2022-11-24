@@ -1,5 +1,5 @@
 import { buildProgramFromSources, loadShadersFromURLS, setupWebGL } from "../../libs/utils.js";
-import { ortho, lookAt, flatten, mult, rotateX, rotateY, inverse, transpose, mat4, vec2, perspective, vec4, vec3 } from "../../libs/MV.js";
+import { ortho, lookAt, flatten, mult, rotateX, rotateY, inverse, transpose, mat4, vec2, perspective, vec4, vec3, translate } from "../../libs/MV.js";
 import { modelView, loadMatrix, multRotationY, multScale, pushMatrix, multTranslation, popMatrix, multRotationX, multRotationZ } from "../../libs/stack.js";
 import { GUI } from '../../libs/dat.gui.module.js';
 
@@ -11,7 +11,7 @@ import * as CUBE from '../../libs/objects/cube.js';
 let gl;
 let program;
 let mode, time, delta, axonometric, aspect;
-let mProjection, mView, invView;
+let mProjection, mView, invView, isPerspective;
 
 let heli = {
     horz: {
@@ -65,21 +65,22 @@ function setup(shaders) {
     axonometric = {
         theta: 25,
         gamma: -45,
-        active: true,
     };
 
     program = buildProgramFromSources(gl, shaders["shader.vert"], shaders["shader.frag"]);
 
-    resize_canvas();
+    resizeCanvas();
+    setAxonometric();
+    orthoProj();
     mode = gl.TRIANGLES;
 
     const gui = new GUI();
     const axView = gui.addFolder("Axonometric View");
-    axView.add(axonometric, "theta", -180, 180).listen();
-    axView.add(axonometric, "gamma", -180, 180).listen();
+    axView.add(axonometric, "theta", -180, 180).onChange(setAxonometric);
+    axView.add(axonometric, "gamma", -180, 180).onChange(setAxonometric);
     axView.open();
 
-    function resize_canvas() {
+    function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         gl.viewport(0, 0, canvas.width, canvas.height);
@@ -91,21 +92,19 @@ function setup(shaders) {
             perspProj();
     }
 
-    function setAxonometric(theta, gamma) {
-        gui.show();
-        axonometric.active = true;
-        axonometric.theta = theta;
-        axonometric.gamma = gamma;
-        orthoProj();
+    function calcInvView() {
+        invView = inverse(mView);
     }
 
-    function setPerspective() {
-        gui.hide();
-        axonometric.active = false;
-        perspProj();
+    function setAxonometric() {
+        mView = lookAt([0, 0, VP_DISTANCE], [0, 0, 0], [0, 1, 0]);
+        mView = mult(mView, rotateX(axonometric.theta));
+        mView = mult(mView, rotateY(axonometric.gamma));
+        calcInvView();
     }
 
     function orthoProj() {
+        isPerspective = false;
         mProjection = ortho(
             -VP_DISTANCE * aspect, VP_DISTANCE * aspect,
             -VP_DISTANCE, VP_DISTANCE,
@@ -114,10 +113,11 @@ function setup(shaders) {
     }
 
     function perspProj() {
+        isPerspective = true;
         mProjection = perspective(80, aspect, 1, -2 * VP_DISTANCE);
     }
 
-    window.addEventListener("resize", resize_canvas);
+    window.addEventListener("resize", resizeCanvas);
 
     document.addEventListener("keydown", function (event) {
         switch (event.key) {
@@ -138,19 +138,31 @@ function setup(shaders) {
                 heli.vert.accel = 10;
                 break;
             case '1':
-                setAxonometric(25, -45);
+                gui.show();
+                setAxonometric();
+                orthoProj();
                 break;
             case '2':
-                setAxonometric(0, 0);
+                gui.hide();
+                mView = lookAt([0, 0, VP_DISTANCE], [0, 0, 0], [0, 1, 0]);
+                calcInvView();
+                orthoProj();
                 break;
             case '3':
-                setAxonometric(90, 0);
+                gui.hide();
+                mView = lookAt([0, VP_DISTANCE, 0], [0, 0, 0], [0, 0, 1]);
+                calcInvView();
+                orthoProj();
                 break;
             case '4':
-                setAxonometric(0, 90);
+                gui.hide();
+                mView = lookAt([VP_DISTANCE, 0, 0], [0, 0, 0], [0, 1, 0]);
+                calcInvView();
+                orthoProj();
                 break;
             case '5':
-                setPerspective();
+                gui.hide();
+                perspProj();
                 break;
         }
     });
@@ -959,20 +971,14 @@ function setup(shaders) {
             flatten(mProjection)
         );
         
-        // Set camera point of view
-        if (axonometric.active) {
-            loadMatrix(lookAt([0, 0, VP_DISTANCE], [0, 0, 0], [0, 1, 0]));
-            multRotationX(axonometric.theta);
-            multRotationY(axonometric.gamma);
-        }
-        else {
-            loadMatrix(lookAt(heli.coords, heli.forward, [0, 1, 0]));
+        // Set camera point of view for the perspective camera
+        if (isPerspective) {
+            mView = lookAt(heli.coords, heli.forward, [0, 1, 0]);
+            calcInvView();
         }
 
-        // modelView() is just the view matrix at this point
-        mView = modelView();
-        invView = inverse(mView);
-
+        loadMatrix(mView);
+        
         GlobalLight([0, 5, 2, 0]);
         Scene();
     }
