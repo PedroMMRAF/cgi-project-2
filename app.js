@@ -209,6 +209,53 @@ function setup(shaders) {
         gl.uniform3fv(gl.getUniformLocation(program, "uColor"), color);
     }
 
+    //#region Decorations
+    function Decorations() {
+        pushMatrix();
+            Floor();
+        popMatrix();
+
+        pushMatrix();
+            EiffelTower();
+        popMatrix();
+
+        pushMatrix();
+            Roads();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([200, 0, 200]);
+            Garden();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([-230, 110, 300]);
+            Building();
+        popMatrix();
+        
+        pushMatrix();
+            multTranslation([285, 0, -285]);
+            ParkingLot();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([-250,50,-250]);
+            multRotationY(45);
+            House();
+        popMatrix();
+    }
+
+    function Floor() {
+        multScale([800, GROUND_HEIGHT, 800]);
+        Cube(FLOOR_GRAY);
+    }
+
+    function Stripe() {
+        multScale([50, 8, 7]);
+        Cube(WHITE);
+    }
+    //#endregion
+
     //#region Eiffel Tower
     function EiffelTower() {
         multTranslation([0, 25, 0]);
@@ -292,57 +339,6 @@ function setup(shaders) {
     }
     //#endregion
 
-    //#region Decorations
-    function Decorations() {
-        pushMatrix();
-            Floor();
-        popMatrix();
-
-        pushMatrix();
-            Roundabout();
-        popMatrix();
-
-        pushMatrix();
-            Roads();
-        popMatrix();
-
-        pushMatrix();
-            multTranslation([200, 0, 200]);
-            Garden();
-        popMatrix();
-
-        pushMatrix();
-            multTranslation([-230, 110, 300]);
-            Building();
-        popMatrix();
-
-        pushMatrix();
-            Cars();
-        popMatrix();
-        
-        pushMatrix();
-            multTranslation([285, 0, -285]);
-            ParkingLot();
-        popMatrix();
-
-        pushMatrix();
-            multTranslation([-250,50,-250]);
-            multRotationY(45);
-            House();
-        popMatrix();
-    }
-
-    function Floor() {
-        multScale([800, GROUND_HEIGHT, 800]);
-        Cube(FLOOR_GRAY);
-    }
-
-    function Stripe() {
-        multScale([50, 8, 7]);
-        Cube(WHITE);
-    }
-    //#endregion
-
     //#region Roundabout
     function Roundabout() {
         pushMatrix();
@@ -382,12 +378,20 @@ function setup(shaders) {
     //#region Roads
     function Roads(){
         pushMatrix();
+            Roundabout();
+        popMatrix();
+
+        pushMatrix();
             Road();
         popMatrix();
 
         pushMatrix();
             multRotationY(90);
             Road();
+        popMatrix();
+
+        pushMatrix();
+            Cars();
         popMatrix();
     }
 
@@ -791,18 +795,6 @@ function setup(shaders) {
         multRotationY(90);
 
         pushMatrix();
-            Body();
-        popMatrix();
-
-        pushMatrix();
-            multTranslation([3, 18, 0]);
-            multRotationY(heli.rotor.pos);
-            MainRotor();
-        popMatrix();
-    }
-
-    function Body() {
-        pushMatrix();
             multScale([56, 28, 28]);
             Sphere(RED);
         popMatrix();
@@ -815,6 +807,12 @@ function setup(shaders) {
         pushMatrix();
             multTranslation([40, 6, 0]);
             TailBoom();
+        popMatrix();
+
+        pushMatrix();
+            multTranslation([3, 18, 0]);
+            multRotationY(heli.rotor.pos);
+            MainRotor();
         popMatrix();
     }
 
@@ -1100,10 +1098,6 @@ function setup(shaders) {
 
         pushMatrix();
             Decorations();
-        popMatrix();
-
-        pushMatrix();
-            EiffelTower();
         popMatrix();
     }
 
