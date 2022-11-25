@@ -1109,7 +1109,7 @@ function setup(shaders) {
 
     function render(t) {
         t /= 1000;
-        const delta = time === undefined ? 0 : t - time;
+        let delta = time === undefined ? 0 : t - time;
         time = t;
 
         if (delta > 0.1)
