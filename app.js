@@ -1,5 +1,5 @@
 import { buildProgramFromSources, loadShadersFromURLS, setupWebGL } from "../../libs/utils.js";
-import { ortho, lookAt, flatten, mult, rotateX, rotateY, inverse, transpose, mat4, vec2, perspective, vec4, vec3, translate } from "../../libs/MV.js";
+import { ortho, lookAt, flatten, mult, rotateX, rotateY, inverse, transpose, mat4, vec2, perspective, vec4, vec3, translate, subtract, normalize, scale, add, radians } from "../../libs/MV.js";
 import { modelView, loadMatrix, multRotationY, multScale, pushMatrix, multTranslation, popMatrix, multRotationX, multRotationZ } from "../../libs/stack.js";
 import { GUI } from '../../libs/dat.gui.module.js';
 
@@ -19,9 +19,10 @@ let heli = {
         pos: 0,
         speed: 0,
         accel: 0,
+        radius: 200,
     },
     vert: {
-        pos: 24,
+        pos: 0,
         speed: 0,
         accel: 0,
     },
@@ -30,13 +31,18 @@ let heli = {
         speed: 0,
         accel: 0,
     },
+    onGround: true,
     height: 0,
     lifting: false,
+    eye: vec3(),
+    at: vec3(),
     coords: vec3(),
-    forward: vec3(),
 }
 
+let boxes = [];
+
 const GROUND_HEIGHT = 5;
+const BOX_SIZE = 20;
 
 const VP_DISTANCE = 400;
 
@@ -137,8 +143,17 @@ function setup(shaders) {
                 heli.vert.accel = -10;
                 break;
             case 'ArrowUp':
-                heli.lifting = true;
-                heli.vert.accel = 10;
+                if (heli.vert.pos < 400) {
+                    heli.lifting = true;
+                    heli.vert.accel = 10;
+                }
+                else {
+                    heli.vert.accel = 0;
+                }
+                break;
+            case ' ':
+                if (!heli.onGround)
+                    createBox();
                 break;
             case '1':
                 gui.show();
@@ -153,7 +168,7 @@ function setup(shaders) {
                 break;
             case '3':
                 gui.hide();
-                mView = lookAt([0, VP_DISTANCE, 0], [0, 0, 0], [0, 0, 1]);
+                mView = lookAt([0, VP_DISTANCE, 0], [0, 0, 0], [1, 0, 0]);
                 calcInvView();
                 orthoProj();
                 break;
@@ -773,6 +788,8 @@ function setup(shaders) {
 
     //#region Helicopter
     function Helicopter() {
+        multRotationY(90);
+
         pushMatrix();
             Body();
         popMatrix();
@@ -818,7 +835,7 @@ function setup(shaders) {
     function LandingSkid() {
         const mModel = mult(invView, modelView());
         const bottom = mult(mModel, [-50, -2, 0, 1]);
-        heli.height = heli.coords[1] - bottom[1];
+        heli.height = heli.eye[1] - bottom[1];
 
         pushMatrix();
             Skid();
@@ -966,6 +983,11 @@ function setup(shaders) {
     }
     //#endregion
     
+    function Box() {
+        multScale([BOX_SIZE, BOX_SIZE, BOX_SIZE]);
+        Cube(EIFFEL_COLOR);
+    }
+
     function GlobalLight(pos) {
         gl.uniform4fv(
             gl.getUniformLocation(program, "uLightDir"),
@@ -978,23 +1000,69 @@ function setup(shaders) {
         heli.vert.speed += (heli.vert.accel - vDecay) / deltaFactor;
         heli.vert.pos += heli.vert.speed / deltaFactor;
         
-        let HAccel = heli.horz.accel;
-        const onGround = heli.vert.pos - 1 <= heli.height + GROUND_HEIGHT;
-        if (onGround && !heli.lifting) {
+        let hAccel = heli.horz.accel;
+        heli.onGround = heli.vert.pos - 1 <= heli.height + GROUND_HEIGHT;
+        if (heli.onGround && !heli.lifting) {
             heli.vert.speed = 0;
             heli.vert.pos = heli.height + GROUND_HEIGHT;
-            HAccel = 0;
+            hAccel = 0;
         }
 
         const hDecay = heli.horz.speed * 0.3;
-        heli.horz.speed += (HAccel - hDecay) / deltaFactor;
+        heli.horz.speed += (hAccel - hDecay) / deltaFactor;
         heli.horz.pos += heli.horz.speed / deltaFactor;
         heli.horz.pos %= 360;
 
-        heli.rotor.accel = !onGround ? 80 + 2 * heli.horz.speed : 0;
+        heli.rotor.accel = !heli.onGround ? 80 + 2 * heli.horz.speed : 0;
         const rDecay = heli.rotor.speed * 0.3;
         heli.rotor.speed += (heli.rotor.accel - rDecay) / deltaFactor;
         heli.rotor.pos += heli.rotor.speed / deltaFactor;
+    }
+
+    function updateBox(box) {
+        const resistence = scale(-0.3, box.speed);
+        const accel = add(box.accel, resistence);
+        box.speed = add(box.speed, scale(1 / deltaFactor, accel));
+        box.pos = add(box.pos, scale(1 / deltaFactor, box.speed));
+
+        if (box.pos[1] <= GROUND_HEIGHT + BOX_SIZE) {
+            box.speed[1] = 0;
+            box.pos[1] = GROUND_HEIGHT + BOX_SIZE;
+        }
+
+        pushMatrix()
+            multTranslation(box.pos);
+            Box();
+        popMatrix();
+    }
+
+    function Boxes() {
+        boxes = boxes.filter((box) => time - box.time < 5000);
+
+        for (let box of boxes) {
+            //console.log(box);
+            updateBox(box);
+        }
+    }
+
+    function createBox() {
+        let dir = normalize(subtract(heli.at, heli.eye));
+        let speed = scale(heli.horz.radius * radians(heli.horz.speed), dir);
+        speed[1] = Math.min(heli.vert.speed, 0);
+
+        let box = {
+            rotation: heli.horz.pos,
+            pos: [
+                heli.coords[0],
+                heli.coords[1] - heli.height - BOX_SIZE,
+                heli.coords[2],
+            ],
+            speed: speed,
+            accel: [0, -10, 0],
+            time: time
+        };
+
+        boxes.push(box);
     }
 
     function Scene() {
@@ -1003,15 +1071,19 @@ function setup(shaders) {
                 updateHeli();
 
             multRotationY(-heli.horz.pos);
-            multTranslation([200, heli.vert.pos, 0]);
+            multTranslation([heli.horz.radius, heli.vert.pos, 0]);
             multRotationX(heli.horz.speed / 2);
-            multRotationY(90);
 
             const mModel = mult(invView, modelView())
-            heli.coords = vec3(mult(mModel, [-40.0, 0, 0, 1.0]));
-            heli.forward = vec3(mult(mModel, [-41.0, 0, 0, 1.0]));
+            heli.eye = vec3(mult(mModel, [0, 0, 60, 1]));
+            heli.at = vec3(mult(mModel, [0, 0, 61, 1]));
+            heli.coords = vec3(mult(mModel, [0, 0, 0, 1]));
 
             Helicopter();
+        popMatrix();
+        
+        pushMatrix();
+            Boxes();
         popMatrix();
 
         pushMatrix();
@@ -1038,7 +1110,7 @@ function setup(shaders) {
         
         // Set camera point of view for the perspective camera
         if (isPerspective) {
-            mView = lookAt(heli.coords, heli.forward, [0, 1, 0]);
+            mView = lookAt(heli.eye, heli.at, [0, 1, 0]);
             calcInvView();
         }
 
