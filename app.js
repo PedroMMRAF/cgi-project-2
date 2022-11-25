@@ -11,7 +11,7 @@ import * as PYRAMID from '../../libs/objects/pyramid.js';
 /** @type {WebGLRenderingContext} */
 let gl;
 let program;
-let mode, time, delta, deltaFactor, axonometric, aspect;
+let mode, time, timeScale, axonometric, aspect;
 let mProjection, mView, invView, isPerspective;
 
 let heli = {
@@ -958,8 +958,8 @@ function setup(shaders) {
 
     function updateHeli() {
         const vDecay = heli.vert.speed * 0.3;
-        heli.vert.speed += (heli.vert.accel - vDecay) * deltaFactor;
-        heli.vert.pos += heli.vert.speed * deltaFactor;
+        heli.vert.speed += (heli.vert.accel - vDecay) * timeScale;
+        heli.vert.pos += heli.vert.speed * timeScale;
         
         heli.onGround = heli.vert.pos - 1 <= heli.height + GROUND_HEIGHT;
         if (heli.onGround && !heli.lifting) {
@@ -970,8 +970,8 @@ function setup(shaders) {
         const hAccel = heli.onGround ? 0 : heli.horz.accel;
 
         const hDecay = heli.horz.speed * 0.3;
-        heli.horz.speed += (hAccel - hDecay) * deltaFactor;
-        heli.horz.pos += heli.horz.speed * deltaFactor;
+        heli.horz.speed += (hAccel - hDecay) * timeScale;
+        heli.horz.pos += heli.horz.speed * timeScale;
         heli.horz.pos %= 360;
 
         if (heli.onGround && heli.lifting && heli.rotor.speed < 160) {
@@ -986,8 +986,8 @@ function setup(shaders) {
             heli.rotor.accel = 80 + heli.horz.speed;
         }
         const rDecay = heli.rotor.speed * 0.3;
-        heli.rotor.speed += (heli.rotor.accel - rDecay) * deltaFactor;
-        heli.rotor.pos += heli.rotor.speed * deltaFactor;
+        heli.rotor.speed += (heli.rotor.accel - rDecay) * timeScale;
+        heli.rotor.pos += heli.rotor.speed * timeScale;
     }
     //#endregion
     
@@ -1009,8 +1009,8 @@ function setup(shaders) {
     function updateBox(box) {
         const resistence = scale(-0.3, box.speed);
         const accel = add(box.accel, resistence);
-        box.speed = add(box.speed, scale(deltaFactor, accel));
-        box.pos = add(box.pos, scale(deltaFactor, box.speed));
+        box.speed = add(box.speed, scale(timeScale, accel));
+        box.pos = add(box.pos, scale(timeScale, box.speed));
 
         if (box.pos[1] <= GROUND_HEIGHT + BOX_SIZE) {
             box.speed[1] = 0;
@@ -1109,12 +1109,13 @@ function setup(shaders) {
 
     function render(t) {
         t /= 1000;
-        delta = time === undefined ? 0 : t - time;
-        deltaFactor = delta * 5;
+        const delta = time === undefined ? 0 : t - time;
         time = t;
 
         if (delta > 0.1)
             delta = 0;
+
+        timeScale = delta * 5;
 
         window.requestAnimationFrame(render);
 
@@ -1138,7 +1139,7 @@ function setup(shaders) {
         GlobalLight([0, 5, 2, 0]);
         Scene();
 
-        if (delta > 0) {
+        if (timeScale > 0) {
             updateHeli();
             updateBoxes();
         }
