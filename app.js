@@ -1,6 +1,6 @@
 import { buildProgramFromSources, loadShadersFromURLS, setupWebGL } from "../../libs/utils.js";
 import { ortho, lookAt, flatten, mult, rotateX, rotateY, inverse, transpose, mat4, vec2, perspective, vec4, vec3, translate, subtract, normalize, scale, add, radians } from "../../libs/MV.js";
-import { modelView, loadMatrix, multRotationY, multScale, pushMatrix, multTranslation, popMatrix, multRotationX, multRotationZ } from "../../libs/stack.js";
+import { modelView, loadMatrix, multRotationY, multScale, pushMatrix, multTranslation, popMatrix, multRotationX, multRotationZ, multMatrix } from "../../libs/stack.js";
 import { GUI } from '../../libs/dat.gui.module.js';
 
 import * as CYLINDER from '../../libs/objects/cylinder.js';
@@ -11,7 +11,7 @@ import * as PYRAMID from '../../libs/objects/pyramid.js';
 /** @type {WebGLRenderingContext} */
 let gl;
 let program;
-let mode, time, deltaFactor, axonometric, aspect;
+let mode, time, delta, deltaFactor, axonometric, aspect;
 let mProjection, mView, invView, isPerspective;
 
 let heli = {
@@ -31,8 +31,8 @@ let heli = {
         speed: 0,
         accel: 0,
     },
-    onGround: true,
     height: 0,
+    onGround: true,
     lifting: false,
     eye: vec3(),
     at: vec3(),
@@ -819,6 +819,10 @@ function setup(shaders) {
     }
 
     function LandingSkids() {
+        const mModel = mult(invView, modelView());
+        const bottom = mult(mModel, [-25, 0, 0, 1]);
+        heli.height = heli.coords[1] - bottom[1];
+
         pushMatrix();
             multTranslation([0, 0, 16]);
             multRotationX(-30);
@@ -833,10 +837,6 @@ function setup(shaders) {
     }
     
     function LandingSkid() {
-        const mModel = mult(invView, modelView());
-        const bottom = mult(mModel, [-50, -2, 0, 1]);
-        heli.height = heli.eye[1] - bottom[1];
-
         pushMatrix();
             Skid();
         popMatrix();
@@ -955,6 +955,96 @@ function setup(shaders) {
         multScale([3, 10, 3]);
         Cylinder(RED);
     }
+
+    function updateHeli() {
+        const vDecay = heli.vert.speed * 0.3;
+        heli.vert.speed += (heli.vert.accel - vDecay) * deltaFactor;
+        heli.vert.pos += heli.vert.speed * deltaFactor;
+        
+        heli.onGround = heli.vert.pos - 1 <= heli.height + GROUND_HEIGHT;
+        if (heli.onGround && !heli.lifting) {
+            heli.vert.speed = 0;
+            heli.vert.pos = heli.height + GROUND_HEIGHT;
+        }
+
+        const hAccel = heli.onGround ? 0 : heli.horz.accel;
+
+        const hDecay = heli.horz.speed * 0.3;
+        heli.horz.speed += (hAccel - hDecay) * deltaFactor;
+        heli.horz.pos += heli.horz.speed * deltaFactor;
+        heli.horz.pos %= 360;
+
+        if (heli.onGround && heli.lifting && heli.rotor.speed < 160) {
+            heli.rotor.accel = 60;
+            heli.vert.speed = 0;
+            heli.vert.pos = heli.height + GROUND_HEIGHT;
+        }
+        else if (heli.onGround && !heli.lifting) {
+            heli.rotor.accel = 0;
+        }
+        else {
+            heli.rotor.accel = 80 + heli.horz.speed;
+        }
+        const rDecay = heli.rotor.speed * 0.3;
+        heli.rotor.speed += (heli.rotor.accel - rDecay) * deltaFactor;
+        heli.rotor.pos += heli.rotor.speed * deltaFactor;
+    }
+    //#endregion
+    
+    //#region Boxes
+    function Box() {
+        multScale([BOX_SIZE, BOX_SIZE, BOX_SIZE]);
+        Cube(EIFFEL_COLOR);
+    }
+
+    function Boxes() {
+        for (let box of boxes) {
+            pushMatrix()
+                multTranslation(box.pos);
+                Box();
+            popMatrix();
+        }
+    }
+
+    function updateBox(box) {
+        const resistence = scale(-0.3, box.speed);
+        const accel = add(box.accel, resistence);
+        box.speed = add(box.speed, scale(deltaFactor, accel));
+        box.pos = add(box.pos, scale(deltaFactor, box.speed));
+
+        if (box.pos[1] <= GROUND_HEIGHT + BOX_SIZE) {
+            box.speed[1] = 0;
+            box.pos[1] = GROUND_HEIGHT + BOX_SIZE;
+        }
+    }
+
+    function updateBoxes() {
+        boxes = boxes.filter((box) => time - box.time < 5);
+
+        for (let box of boxes) {
+            updateBox(box);
+        }
+    }
+
+    function createBox() {
+        let dir = normalize(subtract(heli.at, heli.eye));
+        let speed = scale(heli.horz.radius * radians(heli.horz.speed), dir);
+        speed[1] = heli.vert.speed;
+
+        let box = {
+            rotation: heli.horz.pos,
+            pos: [
+                heli.coords[0],
+                heli.coords[1] - heli.height - BOX_SIZE,
+                heli.coords[2],
+            ],
+            speed: speed,
+            accel: [0, -10, 0],
+            time: time
+        };
+
+        boxes.push(box);
+    }
     //#endregion
 
     //#region Base Models
@@ -983,11 +1073,6 @@ function setup(shaders) {
     }
     //#endregion
     
-    function Box() {
-        multScale([BOX_SIZE, BOX_SIZE, BOX_SIZE]);
-        Cube(EIFFEL_COLOR);
-    }
-
     function GlobalLight(pos) {
         gl.uniform4fv(
             gl.getUniformLocation(program, "uLightDir"),
@@ -995,84 +1080,11 @@ function setup(shaders) {
         );
     }
 
-    function updateHeli() {
-        const vDecay = heli.vert.speed * 0.3;
-        heli.vert.speed += (heli.vert.accel - vDecay) / deltaFactor;
-        heli.vert.pos += heli.vert.speed / deltaFactor;
-        
-        let hAccel = heli.horz.accel;
-        heli.onGround = heli.vert.pos - 1 <= heli.height + GROUND_HEIGHT;
-        if (heli.onGround && !heli.lifting) {
-            heli.vert.speed = 0;
-            heli.vert.pos = heli.height + GROUND_HEIGHT;
-            hAccel = 0;
-        }
-
-        const hDecay = heli.horz.speed * 0.3;
-        heli.horz.speed += (hAccel - hDecay) / deltaFactor;
-        heli.horz.pos += heli.horz.speed / deltaFactor;
-        heli.horz.pos %= 360;
-
-        heli.rotor.accel = !heli.onGround ? 80 + 2 * heli.horz.speed : 0;
-        const rDecay = heli.rotor.speed * 0.3;
-        heli.rotor.speed += (heli.rotor.accel - rDecay) / deltaFactor;
-        heli.rotor.pos += heli.rotor.speed / deltaFactor;
-    }
-
-    function updateBox(box) {
-        const resistence = scale(-0.3, box.speed);
-        const accel = add(box.accel, resistence);
-        box.speed = add(box.speed, scale(1 / deltaFactor, accel));
-        box.pos = add(box.pos, scale(1 / deltaFactor, box.speed));
-
-        if (box.pos[1] <= GROUND_HEIGHT + BOX_SIZE) {
-            box.speed[1] = 0;
-            box.pos[1] = GROUND_HEIGHT + BOX_SIZE;
-        }
-
-        pushMatrix()
-            multTranslation(box.pos);
-            Box();
-        popMatrix();
-    }
-
-    function Boxes() {
-        boxes = boxes.filter((box) => time - box.time < 5000);
-
-        for (let box of boxes) {
-            //console.log(box);
-            updateBox(box);
-        }
-    }
-
-    function createBox() {
-        let dir = normalize(subtract(heli.at, heli.eye));
-        let speed = scale(heli.horz.radius * radians(heli.horz.speed), dir);
-        speed[1] = heli.vert.speed;
-
-        let box = {
-            rotation: heli.horz.pos,
-            pos: [
-                heli.coords[0],
-                heli.coords[1] - heli.height - BOX_SIZE,
-                heli.coords[2],
-            ],
-            speed: speed,
-            accel: [0, -10, 0],
-            time: time
-        };
-
-        boxes.push(box);
-    }
-
     function Scene() {
         pushMatrix();
-            if (deltaFactor > 0)
-                updateHeli();
-
             multRotationY(-heli.horz.pos);
             multTranslation([heli.horz.radius, heli.vert.pos, 0]);
-            multRotationX(heli.horz.speed / 2);
+            multRotationX(heli.horz.speed * 0.75);
 
             const mModel = mult(invView, modelView())
             heli.eye = vec3(mult(mModel, [0, 0, 60, 1]));
@@ -1096,8 +1108,15 @@ function setup(shaders) {
     }
 
     function render(t) {
-        deltaFactor = 200 / (time === undefined ? 0 : t - time);
+        t /= 1000;
+        delta = time === undefined ? 0 : t - time;
+        deltaFactor = delta * 5;
         time = t;
+
+        if (delta > 0.1)
+            delta = 0;
+
+        window.requestAnimationFrame(render);
 
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.useProgram(program);
@@ -1119,7 +1138,10 @@ function setup(shaders) {
         GlobalLight([0, 5, 2, 0]);
         Scene();
 
-        window.requestAnimationFrame(render);
+        if (delta > 0) {
+            updateHeli();
+            updateBoxes();
+        }
     }
 
     window.requestAnimationFrame(render);
