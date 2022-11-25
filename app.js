@@ -11,7 +11,7 @@ import * as PYRAMID from '../../libs/objects/pyramid.js';
 /** @type {WebGLRenderingContext} */
 let gl;
 let program;
-let mode, time, delta, axonometric, aspect;
+let mode, time, deltaFactor, axonometric, aspect;
 let mProjection, mView, invView, isPerspective;
 
 let heli = {
@@ -975,8 +975,8 @@ function setup(shaders) {
 
     function updateHeli() {
         const vDecay = heli.vert.speed * 0.3;
-        heli.vert.speed += (heli.vert.accel - vDecay) / delta;
-        heli.vert.pos += heli.vert.speed / delta;
+        heli.vert.speed += (heli.vert.accel - vDecay) / deltaFactor;
+        heli.vert.pos += heli.vert.speed / deltaFactor;
         
         let HAccel = heli.horz.accel;
         const onGround = heli.vert.pos - 1 <= heli.height + GROUND_HEIGHT;
@@ -987,19 +987,19 @@ function setup(shaders) {
         }
 
         const hDecay = heli.horz.speed * 0.3;
-        heli.horz.speed += (HAccel - hDecay) / delta;
-        heli.horz.pos += heli.horz.speed / delta;
+        heli.horz.speed += (HAccel - hDecay) / deltaFactor;
+        heli.horz.pos += heli.horz.speed / deltaFactor;
         heli.horz.pos %= 360;
 
         heli.rotor.accel = !onGround ? 80 + 2 * heli.horz.speed : 0;
         const rDecay = heli.rotor.speed * 0.3;
-        heli.rotor.speed += (heli.rotor.accel - rDecay) / delta;
-        heli.rotor.pos += heli.rotor.speed / delta;
+        heli.rotor.speed += (heli.rotor.accel - rDecay) / deltaFactor;
+        heli.rotor.pos += heli.rotor.speed / deltaFactor;
     }
 
     function Scene() {
         pushMatrix();
-            if (delta > 0)
+            if (deltaFactor > 0)
                 updateHeli();
 
             multRotationY(-heli.horz.pos);
@@ -1024,7 +1024,7 @@ function setup(shaders) {
     }
 
     function render(t) {
-        delta = time === undefined ? 0 : t - time;
+        deltaFactor = 200 / (time === undefined ? 0 : t - time);
         time = t;
 
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
