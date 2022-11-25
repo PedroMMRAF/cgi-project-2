@@ -1048,7 +1048,7 @@ function setup(shaders) {
     function createBox() {
         let dir = normalize(subtract(heli.at, heli.eye));
         let speed = scale(heli.horz.radius * radians(heli.horz.speed), dir);
-        speed[1] = Math.min(heli.vert.speed, 0);
+        speed[1] = heli.vert.speed;
 
         let box = {
             rotation: heli.horz.pos,
