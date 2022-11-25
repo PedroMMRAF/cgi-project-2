@@ -311,8 +311,8 @@ function setup(shaders) {
         popMatrix();
 
         pushMatrix();
-            multTranslation([100,0,-230]);
-            multRotationY(40);
+            multTranslation([-250,50,-250]);
+            multRotationY(45);
             House();
         popMatrix();
     }
@@ -723,27 +723,26 @@ function setup(shaders) {
     //#region House
     function House(){
         pushMatrix();
-            multTranslation([-255, 50, -270]);
             HouseStructure();
         popMatrix();
 
         pushMatrix();
-            multTranslation([-255, 150, -270]);
+            multTranslation([0, 100, 0]);
             Roof();
         popMatrix();
 
         pushMatrix();
-            multTranslation([-255, 20, -195]);
+            multTranslation([0, -30, 75]);
             HouseDoor();
         popMatrix();
 
         pushMatrix();
-            multTranslation([-320, 60, -195]);
+            multTranslation([-65, 10, 75]);
             HouseWindow();
         popMatrix();
 
         pushMatrix();
-            multTranslation([-190, 60, -195]);
+            multTranslation([65, 10, 75]);
             HouseWindow();
         popMatrix();
 
@@ -978,16 +977,17 @@ function setup(shaders) {
         const vDecay = heli.vert.speed * 0.3;
         heli.vert.speed += (heli.vert.accel - vDecay) / delta;
         heli.vert.pos += heli.vert.speed / delta;
-
+        
+        let HAccel = heli.horz.accel;
         const onGround = heli.vert.pos - 1 <= heli.height + GROUND_HEIGHT;
         if (onGround && !heli.lifting) {
             heli.vert.speed = 0;
             heli.vert.pos = heli.height + GROUND_HEIGHT;
-            heli.horz.accel = 0;
+            HAccel = 0;
         }
 
         const hDecay = heli.horz.speed * 0.3;
-        heli.horz.speed += (heli.horz.accel - hDecay) / delta;
+        heli.horz.speed += (HAccel - hDecay) / delta;
         heli.horz.pos += heli.horz.speed / delta;
         heli.horz.pos %= 360;
 
@@ -1027,8 +1027,6 @@ function setup(shaders) {
         delta = time === undefined ? 0 : t - time;
         time = t;
 
-        window.requestAnimationFrame(render);
-
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.useProgram(program);
 
@@ -1048,6 +1046,8 @@ function setup(shaders) {
         
         GlobalLight([0, 5, 2, 0]);
         Scene();
+
+        window.requestAnimationFrame(render);
     }
 
     window.requestAnimationFrame(render);
