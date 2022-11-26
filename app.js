@@ -216,6 +216,7 @@ function setup(shaders) {
         popMatrix();
 
         pushMatrix();
+            multTranslation([0, 25, 0]);
             EiffelTower();
         popMatrix();
 
@@ -258,8 +259,6 @@ function setup(shaders) {
 
     //#region Eiffel Tower
     function EiffelTower() {
-        multTranslation([0, 25, 0]);
-        
         for (let i = 0; i < 4; i++) {
             pushMatrix();
                 multRotationY(90 * i);
@@ -295,9 +294,8 @@ function setup(shaders) {
             EiffelFloor2();
         popMatrix();
 
-        multTranslation([-12, 106, 12]);
-
         pushMatrix();
+            multTranslation([-12, 106, 12]);
             EiffelLegP3();
         popMatrix();
     }
@@ -336,42 +334,6 @@ function setup(shaders) {
     function EiffelTop() {
         multScale([15, 40, 15]);
         Cube(EIFFEL_COLOR);
-    }
-    //#endregion
-
-    //#region Roundabout
-    function Roundabout() {
-        pushMatrix();
-            RoundaboutRoad();
-        popMatrix();
-
-        pushMatrix();
-            RoundaboutGrass();
-        popMatrix();
-
-        pushMatrix();
-            RoundaboutStripes();
-        popMatrix();
-    }
-
-    function RoundaboutRoad() {
-        multScale([500, 7, 500]);
-        Cylinder([0.04, 0.04, 0.04]);
-    }
-
-    function RoundaboutGrass() {
-        multScale([300, 8, 300]);
-        Cylinder([0.64, 0.68, 0.08]);
-    }
-
-    function RoundaboutStripes() {
-        for (let i = 0; i < 360; i += 40) {
-            pushMatrix();
-                multRotationY(i);
-                multTranslation([0, 0, 200]);
-                Stripe();
-            popMatrix();
-        }
     }
     //#endregion
 
@@ -445,6 +407,40 @@ function setup(shaders) {
             multRotationY(180);
             Car(RED);
         popMatrix();
+    }
+
+    function Roundabout() {
+        pushMatrix();
+            RoundaboutRoad();
+        popMatrix();
+
+        pushMatrix();
+            RoundaboutGrass();
+        popMatrix();
+
+        pushMatrix();
+            RoundaboutStripes();
+        popMatrix();
+    }
+
+    function RoundaboutRoad() {
+        multScale([500, 7, 500]);
+        Cylinder([0.04, 0.04, 0.04]);
+    }
+
+    function RoundaboutGrass() {
+        multScale([300, 8, 300]);
+        Cylinder([0.64, 0.68, 0.08]);
+    }
+
+    function RoundaboutStripes() {
+        for (let i = 0; i < 360; i += 40) {
+            pushMatrix();
+                multRotationY(i);
+                multTranslation([0, 0, 200]);
+                Stripe();
+            popMatrix();
+        }
     }
     //#endregion
 
@@ -999,6 +995,7 @@ function setup(shaders) {
         for (let box of boxes) {
             pushMatrix()
                 multTranslation(box.pos);
+                multRotationY(box.rotation);
                 Box();
             popMatrix();
         }
@@ -1030,7 +1027,7 @@ function setup(shaders) {
         speed[1] = heli.vert.speed;
 
         let box = {
-            rotation: heli.horz.pos,
+            rotation: -heli.horz.pos,
             pos: [
                 heli.coords[0],
                 heli.coords[1] - heli.height - BOX_SIZE,
@@ -1038,7 +1035,7 @@ function setup(shaders) {
             ],
             speed: speed,
             accel: [0, -10, 0],
-            time: time
+            time: time,
         };
 
         boxes.push(box);
