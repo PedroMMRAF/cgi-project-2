@@ -1007,9 +1007,9 @@ function setup(shaders) {
         box.speed = add(box.speed, scale(timeScale, accel));
         box.pos = add(box.pos, scale(timeScale, box.speed));
 
-        if (box.pos[1] <= GROUND_HEIGHT + BOX_SIZE) {
+        if (box.pos[1] <= (GROUND_HEIGHT + BOX_SIZE) / 2) {
             box.speed[1] = 0;
-            box.pos[1] = GROUND_HEIGHT + BOX_SIZE;
+            box.pos[1] = (GROUND_HEIGHT + BOX_SIZE) / 2;
         }
     }
 
